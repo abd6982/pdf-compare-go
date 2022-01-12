@@ -232,30 +232,29 @@ func main() {
 	filenamePtr := flag.String("f", "default", "Filenames to look at")
 	wordPtr 	:= flag.Int("minlen", 280, "Minimum length of text match")
 	flag.Parse()
-
-	// Params
 	var minLen int = *wordPtr
 	var filenames []string = parseFilenameString(*filenamePtr)
 
 	// Make sure we have files to actually read
-	if len(filenames) > 2 {
-		panic("More than 2 files not implemented!")
-	} else if len(filenames) < 2 {
-		panic("Need at least 2 files to compare!")
+	if len(filenames) != 2 {
+		panic("Need exactly 2 files to compare!")
 	}
 
 	// Read the PDF text
-	content1, err := readPdf(filenames[0]) // Read local pdf file
-	if err != nil {
-		panic(err)
+	var allTexts []string
+	for _, filename := range filenames {
+		content, err := readPdf(filename) // Read local pdf file
+		if err != nil {
+			panic(err)
+		}
+		allTexts = append(allTexts, content)
 	}
-	content2, err := readPdf(filenames[1]) // Read local pdf file
-	if err != nil {
-		panic(err)
-	}	
 
-	var lenA int = len(content1)
-	var combinedText string = content1 + "||" + content2
+	var lenA int = len(allTexts[0]) // TODO: figure out how to do w >2 files
+	var combinedText string
+	for _, text := range allTexts {
+		combinedText = combinedText + "||" + text
+	}
 	var lcs = longestCommonSubstring(lenA, combinedText, minLen)
 
 	fmt.Println(lcs)
