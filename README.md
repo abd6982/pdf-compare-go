@@ -1,4 +1,4 @@
-# pdf-compare-go
+# PDF comparison tool written in Go
 
 ## Usage
 Note: filenames are separated by commas
