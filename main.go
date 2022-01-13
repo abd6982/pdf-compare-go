@@ -216,7 +216,7 @@ func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
 	
 	// Get suffix array and Longest Common Prefix (LCP) array
 	// for combined text
-	var textCombined string = text1 + text2
+	var textCombined string = text1 + "||" + text2
 	var sa []int = getSuffixArray(textCombined)
 	var lcp []int = kasai(textCombined, sa)
 
@@ -232,7 +232,8 @@ func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
 			var jMin int = min(j1, j2)
 			var jMax int = max(j1, j2)
 			var isInBoth bool = jMin < len(text1) && jMax > len(text1)
-			if isInBoth {
+			var doesNotCross bool = !(jMin < len(text1) && jMin+h > len(text1))
+			if isInBoth && doesNotCross {
 				var substring string = (textCombined)[j1:j1 + h]
 				candidates = append(candidates, substring)
 			}
@@ -398,7 +399,8 @@ func findPage(pages []string, susSubstr string) string {
 	// Go through pages and check where the sus substr occurs
 	for i, pageText := range pages {
 		if strings.Contains(pageText, susSubstr) {
-			return string(i + 1)
+			pageNum := strconv.Itoa(i+1)
+			return pageNum
 		}
 	}
 
