@@ -17,6 +17,8 @@ It can also detect duplicated digit sequences, which is useful in finding tables
 
 ## Performance
 
+Performance numbers for 2019 MacBook Pro, 2.3 GHz 8-Core Intel Core i9, 16 GB RAM, 4 GB Graphics:
+
 | Step 				| Run time (10 page files) | Run time (500 page files) |
 | ----------------- | ------------------------ | ------------------------- |
 | Read PDF 			| 0.3 sec 	 			   | 1 sec 					   |
