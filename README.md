@@ -14,3 +14,12 @@ go run main.go -f data/test_pdfs/small_test/copied_data.pdf,data/test_pdfs/small
 Currently this tool can detect text overlaps between two PDFs, e.g. when text has been copy-pasted from one file into another.
 
 It can also detect duplicated digit sequences, which is useful in finding tables that may have been copy-pasted between two files.
+
+## Performance
+
+| Step 				| Time taken  |
+| ----------------- | ----------- |
+| Read PDF 			| 0.3-0.5 sec |
+| Run analytics 	| 0.1 sec     |
+
+This script can be described as a two-step process. The first step is reading the PDF file. For this we currently use the Go bindings for MuPDF, a popular package written in C++. Reading a PDF takes about 0.3-0.5 seconds depending on size.
