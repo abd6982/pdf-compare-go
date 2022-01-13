@@ -4,21 +4,20 @@
 package main
 
 import (
-	"fmt"
-	"flag"
-	"sort"
-	"reflect"
-	"regexp"
-	"strings"
-	"strconv"
 	"encoding/csv"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"index/suffixarray"
+	"reflect"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 	// "bytes"
 	// "github.com/ledongthuc/pdf"
 	"github.com/gen2brain/go-fitz"
 )
-
 
 // UTILS - pure utility functions
 //------------------------------------------------------------------------------
@@ -29,7 +28,6 @@ func min(a, b int) int {
 	return b
 }
 
-
 func max(a, b int) int {
 	if a >= b {
 		return a
@@ -37,9 +35,8 @@ func max(a, b int) int {
 	return b
 }
 
-
 func parseFilenameString(s string) []string {
-	// string 'data/file1.pdf,"data folder/file2.pdf"' 
+	// string 'data/file1.pdf,"data folder/file2.pdf"'
 	//				-> ['data/file1.pdf', 'data folder/file2.pdf']
 	// https://stackoverflow.com/questions/47489745/splitting-a-string-at-space-except-inside-quotation-marks
 	r := csv.NewReader(strings.NewReader(s))
@@ -56,16 +53,15 @@ func parseFilenameString(s string) []string {
 	return fields
 }
 
-
 // COMMON SUBSTRING - functions and structs for lcs and text comparison
 //------------------------------------------------------------------------------
-func getSuffixArray(text string) ([]int) {
+func getSuffixArray(text string) []int {
 	// Get suffix array of string.
 	// Suppose we have a string s = "banana$"
 	// suffixArray(s) = [6, 5, 3, 1, 0, 4, 2]
 	// In the suffix array, 6 means s[6:] which is "$",
-	// 5 means s[5:] which is "a$", etc. in alphabetical order of suffixes. 
-	// The suffixes, in alphabetical order, are: 
+	// 5 means s[5:] which is "a$", etc. in alphabetical order of suffixes.
+	// The suffixes, in alphabetical order, are:
 	// 	- $
 	// 	- a$
 	// 	- ana$
@@ -79,7 +75,7 @@ func getSuffixArray(text string) ([]int) {
 
 	// Hack to extract out suffix array.
 	// The go standard library has a highly optimized suffix array
-	// function but the actual suffix array is a hidden value 
+	// function but the actual suffix array is a hidden value
 	// so we have to access it using weird creative methods.
 	indexCopy := reflect.Indirect(reflect.ValueOf(index))
 	var saVal reflect.Value = indexCopy.FieldByName("sa")
@@ -94,13 +90,12 @@ func getSuffixArray(text string) ([]int) {
 			panic(err)
 		}
 		suffArr = append(suffArr, j)
-	   }
+	}
 
 	return suffArr
 }
 
-
-func kasai(txt string, suffixArr []int) ([]int) {
+func kasai(txt string, suffixArr []int) []int {
 	// Suppose we have a string s = "banana$"
 	// suffixArray(s) = [6, 5, 3, 1, 0, 4, 2]
 	//
@@ -109,65 +104,64 @@ func kasai(txt string, suffixArr []int) ([]int) {
 	// compared to the previous suffix.
 	// In the LCP array, the first value is 0 because there is no previous
 	// suffix. Then the next value is 0 because suffixes "$" and "a$" do not share
-	// a prefix. Then the value is 1 because "a$" and "ana$" share a 1-letter 
+	// a prefix. Then the value is 1 because "a$" and "ana$" share a 1-letter
 	// prefix "a". The next value is 3 because "ana$" and "anana$" share a 3-letter
 	// prefix "ana". And so on.
 
 	var n int = len(suffixArr)
- 
+
 	// To store LCP array
 	var lcp = make([]int, n)
- 
+
 	// An auxiliary array to store inverse of suffix array
 	// elements. For example if suffixArr[0] is 5, the
 	// invSuff[5] would store 0.  This is used to get next
 	// suffix string from suffix array.
 	var invSuff = make([]int, n)
- 
+
 	// Fill values in invSuff[]
-	for i:=0; i < n; i++ {
+	for i := 0; i < n; i++ {
 		invSuff[suffixArr[i]] = i
 	}
- 
+
 	// Initialize length of previous LCP
 	var k int = 0
- 
+
 	// Process all suffixes one by one starting from
 	// first suffix in txt[]
-	for i:=0; i<n; i++ {
+	for i := 0; i < n; i++ {
 		// If the current suffix is at i=0, then we don’t
 		// have prev substring to consider. So lcp is not
 		// defined for this substring, we put zero.
 		if invSuff[i] == 0 {
 			k = 0
-			continue;
+			continue
 		}
- 
+
 		// j contains index of the prev substring to
 		// be considered  to compare with the present
 		// substring, i.e., prev string in suffix array
-		var j int = suffixArr[invSuff[i]-1];
- 
+		var j int = suffixArr[invSuff[i]-1]
+
 		// Directly start matching from k'th index as
 		// at-least k-1 characters will match
-		for i+k<n && j+k<n && txt[i+k]==txt[j+k] {
+		for i+k < n && j+k < n && txt[i+k] == txt[j+k] {
 			k++
 		}
- 
+
 		lcp[invSuff[i]] = k // lcp for the present suffix.
- 
+
 		// Deleting the starting character from the string.
-		if k>0 {
+		if k > 0 {
 			k--
 		}
 	}
- 
+
 	// return the constructed lcp array
 	return lcp
 }
 
-
-func isSubsetOfAnyExisting(new string, existing []string) (bool) {
+func isSubsetOfAnyExisting(new string, existing []string) bool {
 	// This is made easier bc it's sorted by length
 	// so a subsequent element can never be a superset of an existing.
 	for _, strExisting := range existing {
@@ -178,7 +172,6 @@ func isSubsetOfAnyExisting(new string, existing []string) (bool) {
 	return false
 }
 
-
 func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
 	// Find all common non-overlapping substrings between two strings.
 	// minLen is the minimum acceptable length of resulting common substrings.
@@ -187,7 +180,7 @@ func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
 	//	-> ["bcd"]
 	//	Note: "bc" and "cd" are also common substrings, but they are substrings
 	//		of "bcd" and therefore do not count.
-	// 
+	//
 	// combined: "abcdebcbcd"
 	// suffix array: 	[0 5 7 1 6 8 2 9 3 4]
 	// suffixes:
@@ -213,7 +206,7 @@ func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
 	//
 	// We sort the candidates by length and remove those that are substrings of
 	// any previous candidate. Thus we are left with "bcd".
-	
+
 	// Get suffix array and Longest Common Prefix (LCP) array
 	// for combined text
 	var textCombined string = text1 + "||" + text2
@@ -226,7 +219,7 @@ func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
 	for i := 1; i < len(sa); i++ {
 		var isLongEnough bool = lcp[i] > minLen
 		if isLongEnough {
-			var j1 int = sa[i - 1]
+			var j1 int = sa[i-1]
 			var j2 int = sa[i]
 			var h int = lcp[i]
 			var jMin int = min(j1, j2)
@@ -234,10 +227,10 @@ func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
 			var isInBoth bool = jMin < len(text1) && jMax > len(text1)
 			var doesNotCross bool = !(jMin < len(text1) && jMin+h > len(text1))
 			if isInBoth && doesNotCross {
-				var substring string = (textCombined)[j1:j1 + h]
+				var substring string = (textCombined)[j1 : j1+h]
 				candidates = append(candidates, substring)
 			}
-		}	
+		}
 	}
 
 	// Remove candidates that are a substring of other candidates.
@@ -259,22 +252,19 @@ func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
 	return nonOverlapping
 }
 
-
 // READ PDFS - functions for reading and getting data out of pdfs
 //------------------------------------------------------------------------------
 
-
 type PdfData struct {
-	PathToFile 		string
-	Filename 		string
-	PageTexts 		[]string
-	PageDigits 		[]string
+	PathToFile      string
+	Filename        string
+	PageTexts       []string
+	PageDigits      []string
 	PageImageHashes []string
-	FullText 		string
-	FullDigits		string
+	FullText        string
+	FullDigits      string
 	FullImageHashes string
 }
-
 
 func getShortFilename(f string) string {
 	var sep string = "/"
@@ -282,17 +272,16 @@ func getShortFilename(f string) string {
 	return split[len(split)-1]
 }
 
-
 func getPageTexts(fpath string) []string {
 	var result []string
-	
+
 	// * USING LEDONGTHUC * (TODO: test if faster)
 	// f, r, err := pdf.Open(fpath)
 	// 	defer f.Close()
 	// if err != nil {
 	// 	panic(err)
 	// }
-	
+
 	// var buf bytes.Buffer
 	// var nPages int = r.NumPage()
 
@@ -301,7 +290,7 @@ func getPageTexts(fpath string) []string {
 	// 	page := r.Page(i)
 	// 	pageText, err := page.GetPlainText()
 	// }
-	
+
 	// USING MUPDF
 	doc, err := fitz.New(fpath)
 	if err != nil {
@@ -321,7 +310,6 @@ func getPageTexts(fpath string) []string {
 	return result
 }
 
-
 func getPageDigits(pageTexts []string) []string {
 	var result []string
 
@@ -338,7 +326,6 @@ func getPageDigits(pageTexts []string) []string {
 	return result
 }
 
-
 func getPdfData(fullFilename string) PdfData {
 	var filename string = getShortFilename(fullFilename)
 	var pageTexts []string = getPageTexts(fullFilename)
@@ -349,18 +336,17 @@ func getPdfData(fullFilename string) PdfData {
 	var fullImageHashes string // = TODO
 
 	var result PdfData = PdfData{
-		PathToFile: fullFilename,
-		Filename: filename,
-		PageTexts: pageTexts,
-		PageDigits: pageDigits,
+		PathToFile:      fullFilename,
+		Filename:        filename,
+		PageTexts:       pageTexts,
+		PageDigits:      pageDigits,
 		PageImageHashes: pageImageHashes,
-		FullText: fullText,
-		FullDigits: fullDigits,
+		FullText:        fullText,
+		FullDigits:      fullDigits,
 		FullImageHashes: fullImageHashes,
 	}
 	return result
 }
-
 
 func getStringPreview(s string) string {
 	var result string = strings.Replace(s, "\n", " ", -1)
@@ -370,26 +356,23 @@ func getStringPreview(s string) string {
 	return result
 }
 
-
 // RESULTS - functions and structs for gathering up the results
 //------------------------------------------------------------------------------
 type ResultPage struct {
-	Filename string 	`json:"filename"`
-	Page 	 string 	`json:"page"`
+	Filename string `json:"filename"`
+	Page     string `json:"page"`
 }
-
 
 type PdfResult struct {
-	Kind 			string 			`json:"type"`
-	StringPreview 	string 			`json:"string_preview"`
-	NumCharacters 	int             `json:"num_characters"`
-	Pages			[]ResultPage  	`json:"pages"`
+	Kind          string       `json:"type"`
+	StringPreview string       `json:"string_preview"`
+	NumCharacters int          `json:"num_characters"`
+	Pages         []ResultPage `json:"pages"`
 }
-
 
 func findPage(pages []string, susSubstr string) string {
 	// Find the page that the bad substring was on.
-	
+
 	// Take only the part before the page separator, if the page separator is
 	// in the string.
 	if strings.Contains(susSubstr, "|") {
@@ -399,15 +382,13 @@ func findPage(pages []string, susSubstr string) string {
 	// Go through pages and check where the sus substr occurs
 	for i, pageText := range pages {
 		if strings.Contains(pageText, susSubstr) {
-			pageNum := strconv.Itoa(i+1)
+			pageNum := strconv.Itoa(i + 1)
 			return pageNum
 		}
 	}
 
 	return "Page not found"
-}	
-
-
+}
 
 func compareFiles(pdf1 PdfData, pdf2 PdfData, minLen int) []PdfResult {
 	var results []PdfResult
@@ -417,21 +398,21 @@ func compareFiles(pdf1 PdfData, pdf2 PdfData, minLen int) []PdfResult {
 
 	for _, s := range commonSubstrings {
 		var strPreview string = getStringPreview(s)
-		
+
 		resultPage1 := ResultPage{
 			Filename: pdf1.Filename,
-			Page: findPage(pdf1.PageTexts, s),
+			Page:     findPage(pdf1.PageTexts, s),
 		}
 		resultPage2 := ResultPage{
 			Filename: pdf2.Filename,
-			Page: findPage(pdf2.PageTexts, s),
+			Page:     findPage(pdf2.PageTexts, s),
 		}
 
 		var result PdfResult = PdfResult{
-			Kind: "Common text string",
+			Kind:          "Common text string",
 			StringPreview: strPreview,
 			NumCharacters: len(s),
-			Pages: []ResultPage{resultPage1, resultPage2},
+			Pages:         []ResultPage{resultPage1, resultPage2},
 		}
 
 		results = append(results, result)
@@ -443,21 +424,21 @@ func compareFiles(pdf1 PdfData, pdf2 PdfData, minLen int) []PdfResult {
 
 	for _, s := range commonDigits {
 		var strPreview string = getStringPreview(s)
-		
+
 		resultPage1 := ResultPage{
 			Filename: pdf1.Filename,
-			Page: findPage(pdf1.PageDigits, s),
+			Page:     findPage(pdf1.PageDigits, s),
 		}
 		resultPage2 := ResultPage{
 			Filename: pdf2.Filename,
-			Page: findPage(pdf2.PageDigits, s),
+			Page:     findPage(pdf2.PageDigits, s),
 		}
 
 		var result PdfResult = PdfResult{
-			Kind: "Common digit string",
+			Kind:          "Common digit string",
 			StringPreview: strPreview,
 			NumCharacters: len(s),
-			Pages: []ResultPage{resultPage1, resultPage2},
+			Pages:         []ResultPage{resultPage1, resultPage2},
 		}
 
 		results = append(results, result)
@@ -468,13 +449,12 @@ func compareFiles(pdf1 PdfData, pdf2 PdfData, minLen int) []PdfResult {
 	return results
 }
 
-
 // MAIN
 //------------------------------------------------------------------------------
 func main() {
 	// Command line flags
 	filenamePtr := flag.String("f", "default", "Filenames to look at")
-	wordPtr 	:= flag.Int("minlen", 280, "Minimum length of text match")
+	wordPtr := flag.Int("minlen", 280, "Minimum length of text match")
 	flag.Parse()
 	var minLen int = *wordPtr
 	var filenames []string = parseFilenameString(*filenamePtr)
@@ -495,7 +475,7 @@ func main() {
 	var results []PdfResult
 	// Iterate over only top triangle of pairs matrix
 	for i := 0; i < len(allPDFs); i++ {
-		for j := i+1; j < len(allPDFs); j++ {
+		for j := i + 1; j < len(allPDFs); j++ {
 			var pdf1 PdfData = allPDFs[i]
 			var pdf2 PdfData = allPDFs[j]
 			var newResults []PdfResult = compareFiles(pdf1, pdf2, minLen)
