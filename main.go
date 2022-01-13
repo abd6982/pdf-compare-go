@@ -7,32 +7,58 @@ import (
 	"fmt"
 	"flag"
 	"sort"
-	"bytes"
 	"reflect"
+	"regexp"
 	"strings"
 	"strconv"
+	"encoding/csv"
+	"encoding/json"
 	"index/suffixarray"
-	"github.com/ledongthuc/pdf"
-    "encoding/csv"
+	// "bytes"
+	// "github.com/ledongthuc/pdf"
+	"github.com/gen2brain/go-fitz"
 )
 
 
+// UTILS - pure utility functions
+//------------------------------------------------------------------------------
 func min(a, b int) int {
-    if a < b {
-        return a
-    }
-    return b
+	if a < b {
+		return a
+	}
+	return b
 }
 
 
 func max(a, b int) int {
-    if a >= b {
-        return a
-    }
-    return b
+	if a >= b {
+		return a
+	}
+	return b
 }
 
 
+func parseFilenameString(s string) []string {
+	// string 'data/file1.pdf,"data folder/file2.pdf"' 
+	//				-> ['data/file1.pdf', 'data folder/file2.pdf']
+	// https://stackoverflow.com/questions/47489745/splitting-a-string-at-space-except-inside-quotation-marks
+	r := csv.NewReader(strings.NewReader(s))
+	r.Comma = ',' // separator
+	fields, err := r.Read()
+	if err != nil {
+		panic(err)
+	}
+	var cleanedFields []string
+	for _, s := range fields {
+		s2 := strings.Trim(s, "\"")
+		cleanedFields = append(cleanedFields, s2)
+	}
+	return fields
+}
+
+
+// LCS - functions and structs for lcs and text comparison
+//------------------------------------------------------------------------------
 func getSuffixArray(text string) ([]int) {
 	// Get suffix array of string
 	var byteContent = []byte(text)
@@ -61,23 +87,6 @@ func getSuffixArray(text string) ([]int) {
 }
 
 
-func readPdf(path string) (string, error) {
- f, r, err := pdf.Open(path)
- // remember close file
-	defer f.Close()
- if err != nil {
-	 return "", err
- }
- var buf bytes.Buffer
-	b, err := r.GetPlainText()
-	if err != nil {
-		return "", err
-	}
-	buf.ReadFrom(b)
- return buf.String(), nil
-}
- 
- 
 /* To construct and return LCP */
 func kasai(txt string, suffixArr []int) ([]int) {
 	var n int = len(suffixArr)
@@ -134,35 +143,21 @@ func kasai(txt string, suffixArr []int) ([]int) {
 }
 
 
-type Substr struct {
-	Text 	string
-	Indexes 	[]int
-}
-
-
-func longestCommonSubstring(lenA int, text string, minLen int) ([]Substr) {
-	// Inputs
-	// 	- lenA: length of the first text
-	// 	- text: combined text (first and second concatenated)
-	// 	- minLen: minimum number of characters in substring
+func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
+	// minLen is the minimum acceptable length of resulting common substrings.
 	//
-	// Get the longest common substrings and their positions.
-	// >>> longest_common_substring('banana')
-	// {'ana': [1, 3]}
-	// >>> text = "not so Agamemnon, who spoke fiercely to "
-	// >>> sorted(longest_common_substring(text).items())
-	// [(' s', [3, 21]), ('no', [0, 13]), ('o ', [5, 20, 38])]
-	// This function can be easy modified for any criteria, e.g. for searching ten
-	// longest non overlapping repeated substrings.
+	// findCommonSubstrings("banana", "anagram", 2)
+	//	-> ["ana", "na"]
 	
 	// Get suffix array and Longest Common Prefix (LCP) array
-	var sa []int = getSuffixArray(text)
-	var lcp []int = kasai(text, sa)
+	// for combined text
+	var sa []int = getSuffixArray(text1 + text2)
+	var lcp []int = kasai(text1 + text2, sa)
 
 	// Collecting the substrings here
 	var crossDocSubstrs []Substr
 
-	for i := 0; i < len(text); i++ {
+	for i := 1; i < len(text); i++ {
 		if lcp[i] > minLen {
 			var j1 int = sa[i - 1]
 			var j2 int = sa[i]
@@ -180,6 +175,24 @@ func longestCommonSubstring(lenA int, text string, minLen int) ([]Substr) {
 			}
 		}	
 	}
+
+
+
+}
+func longestCommonSubstring(lenA int, text string, minLen int) ([]Substr) {
+	// Inputs
+	// 	- lenA: length of the first text
+	// 	- text: combined text (first and second concatenated)
+	// 	- minLen: minimum number of characters in substring
+	//
+	// Get the longest common substrings and their positions.
+	// >>> longest_common_substring('banana')
+	// {'ana': [1, 3]}
+	// >>> text = "not so Agamemnon, who spoke fiercely to "
+	// >>> sorted(longest_common_substring(text).items())
+	// [(' s', [3, 21]), ('no', [0, 13]), ('o ', [5, 20, 38])]
+	// This function can be easy modified for any criteria, e.g. for searching ten
+	// longest non overlapping repeated substrings.
 
 	// Get non overlapping
 	isSubsetOfAnyExisting := func(new Substr, existing []Substr) (bool) {
@@ -202,7 +215,7 @@ func longestCommonSubstring(lenA int, text string, minLen int) ([]Substr) {
 
 	// Sort by length, descending
 	sort.Slice(crossDocSubstrs, func(i, j int) bool {
-	    return len(crossDocSubstrs[i].Text) > len(crossDocSubstrs[j].Text)
+		return len(crossDocSubstrs[i].Text) > len(crossDocSubstrs[j].Text)
 	})
 	var nonOverlapping []Substr
 	for _, new := range crossDocSubstrs {
@@ -215,18 +228,219 @@ func longestCommonSubstring(lenA int, text string, minLen int) ([]Substr) {
 }
 
 
-func parseFilenameString(s string) []string {
-	// https://stackoverflow.com/questions/47489745/splitting-a-string-at-space-except-inside-quotation-marks
-    r := csv.NewReader(strings.NewReader(s))
-    r.Comma = ',' // separator
-    fields, err := r.Read()
-    if err != nil {
-        panic(err)
-    }
-    return fields
+// READ PDFS - functions for reading and getting data out of pdfs
+//------------------------------------------------------------------------------
+
+
+type PdfData struct {
+	PathToFile 		string
+	Filename 		string
+	PageTexts 		[]string
+	PageDigits 		[]string
+	PageImageHashes []string
+	FullText 		string
+	FullDigits		string
+	FullImageHashes string
 }
 
 
+func getShortFilename(f string) string {
+	var sep string = "/"
+	split := strings.Split(f, sep)
+	return split[len(split)-1]
+}
+
+
+func getPageTexts(fpath string) []string {
+	var result []string
+	
+	// * USING LEDONGTHUC * (TODO: test if faster)
+	// f, r, err := pdf.Open(fpath)
+	// 	defer f.Close()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	
+	// var buf bytes.Buffer
+	// var nPages int = r.NumPage()
+
+	// // Pages are from 1 to nPages
+	// for i := 1; i <= nPages; i++ {
+	// 	page := r.Page(i)
+	// 	pageText, err := page.GetPlainText()
+	// }
+	
+	// USING MUPDF
+	doc, err := fitz.New(fpath)
+	if err != nil {
+		panic(err)
+	}
+
+	defer doc.Close()
+
+	for n := 0; n < doc.NumPage(); n++ {
+		text, err := doc.Text(n)
+		if err != nil {
+			panic(err)
+		}
+		result = append(result, text)
+	}
+
+	return result
+}
+
+
+func getPageDigits(pageTexts []string) []string {
+	var result []string
+
+	reg, err := regexp.Compile("[^0-9]+") // non digits
+	if err != nil {
+		panic(err)
+	}
+
+	for _, t := range pageTexts {
+		digits := reg.ReplaceAllString(t, "") // Replace non digits with space
+		result = append(result, digits)
+	}
+
+	return result
+}
+
+
+func getPdfData(fullFilename string) PdfData {
+	var filename string = getShortFilename(fullFilename)
+	var pageTexts []string = getPageTexts(fullFilename)
+	var pageDigits []string = getPageDigits(pageTexts)
+	var pageImageHashes []string // = getPageImageHashes(pageTexts) TODO
+	var fullText string = strings.Join(pageTexts, "|")
+	var fullDigits string = strings.Join(pageDigits, "|")
+	var fullImageHashes string // = TODO
+
+	var result PdfData = PdfData{
+		PathToFile: fullFilename,
+		Filename: filename,
+		PageTexts: pageTexts,
+		PageDigits: pageDigits,
+		PageImageHashes: pageImageHashes,
+		FullText: fullText,
+		FullDigits: fullDigits,
+		FullImageHashes: fullImageHashes,
+	}
+	return result
+}
+
+
+func getStringPreview(s string) string {
+	var result string = strings.Replace(s, "\n", " ", -1)
+	if len(s) >= 97 {
+		result = result[:97] + "..."
+	}
+	return result
+}
+
+
+// RESULTS - functions and structs for gathering up the results
+//------------------------------------------------------------------------------
+type ResultPage struct {
+	Filename string 	`json:"filename"`
+	Page 	 string 	`json:"page"`
+}
+
+
+type PdfResult struct {
+	Kind 			string 			`json:"type"`
+	StringPreview 	string 			`json:"string_preview"`
+	NumCharacters 	int             `json:"num_characters"`
+	Pages			[]ResultPage  	`json:"pages"`
+}
+
+
+func findPage(pages []string, susSubstr string) string {
+	// Find the page that the bad substring was on.
+	
+	// Take only the part before the page separator, if the page separator is
+	// in the string.
+	if strings.Contains(susSubstr, "|") {
+		susSubstr = strings.Split(susSubstr, "|")[0]
+	}
+
+	// Go through pages and check where the sus substr occurs
+	for i, pageText := range pages {
+		if strings.Contains(pageText, susSubstr) {
+			return string(i + 1)
+		}
+	}
+
+	return "Page not found"
+}	
+
+
+
+func compareFiles(pdf1 PdfData, pdf2 PdfData, minLen int) []PdfResult {
+	var results []PdfResult
+
+	// Compare text
+	commonSubstrings := findCommonSubstrings(pdf1.FullText, pdf2.FullText, minLen)
+	var lcs []Substr = longestCommonSubstring(len(text1), combinedText, minLen)
+
+	for _, lcsResult := range lcs {
+		var strPreview string = getStringPreview(lcsResult.Text)
+		
+		resultPage1 := ResultPage{
+			Filename: pdf1.Filename,
+			Page: findPage(pdf1.PageTexts, lcsResult.Text),
+		}
+		resultPage2 := ResultPage{
+			Filename: pdf2.Filename,
+			Page: findPage(pdf2.PageTexts, lcsResult.Text),
+		}
+
+		var result PdfResult = PdfResult{
+			Kind: "Common text string",
+			StringPreview: strPreview,
+			NumCharacters: len(lcsResult.Text),
+			Pages: []ResultPage{resultPage1, resultPage2},
+		}
+
+		results = append(results, result)
+	}
+
+	// Compare digits
+	var digits1 string = pdf1.FullDigits
+	var digits2 string = pdf2.FullDigits
+	var combineddigits string = digits1 + "||" + digits2
+	lcs = longestCommonSubstring(len(digits1), combineddigits, 15)
+
+	for _, lcsResult := range lcs {
+		var strPreview string = getStringPreview(lcsResult.Text)
+		
+		resultPage1 := ResultPage{
+			Filename: pdf1.Filename,
+			Page: findPage(pdf1.PageDigits, lcsResult.Text),
+		}
+		resultPage2 := ResultPage{
+			Filename: pdf2.Filename,
+			Page: findPage(pdf2.PageDigits, lcsResult.Text),
+		}
+
+		var result PdfResult = PdfResult{
+			Kind: "Common digit string",
+			StringPreview: strPreview,
+			NumCharacters: len(lcsResult.Text),
+			Pages: []ResultPage{resultPage1, resultPage2},
+		}
+
+		results = append(results, result)
+	}
+
+	// Compare images
+	// TODO
+	return results
+}
+
+
+// MAIN
+//------------------------------------------------------------------------------
 func main() {
 	// Command line flags
 	filenamePtr := flag.String("f", "default", "Filenames to look at")
@@ -236,29 +450,33 @@ func main() {
 	var filenames []string = parseFilenameString(*filenamePtr)
 
 	// Make sure we have files to actually read
-	if len(filenames) != 2 {
-		panic("Need exactly 2 files to compare!")
+	if len(filenames) < 2 {
+		panic("Need at least 2 files to compare!")
 	}
 
-	// Read the PDF text
-	var allTexts []string
+	// Read the PDFs
+	var allPDFs []PdfData
 	for _, filename := range filenames {
-		content, err := readPdf(filename) // Read local pdf file
-		if err != nil {
-			panic(err)
+		var pdfData PdfData = getPdfData(filename)
+		allPDFs = append(allPDFs, pdfData)
+	}
+
+	// Compare the files
+	var results []PdfResult
+	// Iterate over only top triangle of pairs matrix
+	for i := 0; i < len(allPDFs); i++ {
+		for j := i+1; j < len(allPDFs); j++ {
+			var pdf1 PdfData = allPDFs[i]
+			var pdf2 PdfData = allPDFs[j]
+			var newResults []PdfResult = compareFiles(pdf1, pdf2, minLen)
+			results = append(results, newResults...)
 		}
-		allTexts = append(allTexts, content)
 	}
 
-	var lenA int = len(allTexts[0]) // TODO: figure out how to do w >2 files
-	var combinedText string
-	for _, text := range allTexts {
-		combinedText = combinedText + "||" + text
-	}
-	var lcs = longestCommonSubstring(lenA, combinedText, minLen)
+	resultsJson, _ := json.Marshal(results)
+	fmt.Println(string(resultsJson))
 
-	fmt.Println(lcs)
-	// myStr := content[23:len(content)]
-	// fmt.Println(myStr)
+	lcsTest := longestCommonSubstring(6, "banana banana", 0)
+	fmt.Println(lcsTest)
 	return
 }
