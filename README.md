@@ -28,7 +28,7 @@ This script can be described as a two-step process. The first step is reading th
 
 ### Profiling
 
-(Read more)[https://go.dev/blog/pprof]
+[Click here](https://go.dev/blog/pprof) for general info about profiling in Go.
 
 Run to generate profile:
 ```zsh
