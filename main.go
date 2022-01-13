@@ -57,10 +57,23 @@ func parseFilenameString(s string) []string {
 }
 
 
-// LCS - functions and structs for lcs and text comparison
+// COMMON SUBSTRING - functions and structs for lcs and text comparison
 //------------------------------------------------------------------------------
 func getSuffixArray(text string) ([]int) {
-	// Get suffix array of string
+	// Get suffix array of string.
+	// Suppose we have a string s = "banana$"
+	// suffixArray(s) = [6, 5, 3, 1, 0, 4, 2]
+	// In the suffix array, 6 means s[6:] which is "$",
+	// 5 means s[5:] which is "a$", etc. in alphabetical order of suffixes. 
+	// The suffixes, in alphabetical order, are: 
+	// 	- $
+	// 	- a$
+	// 	- ana$
+	// 	- anana$
+	// 	- banana$
+	// 	- na$
+	// 	- nana$
+
 	var byteContent = []byte(text)
 	var index *suffixarray.Index = suffixarray.New(byteContent)
 
@@ -87,8 +100,19 @@ func getSuffixArray(text string) ([]int) {
 }
 
 
-/* To construct and return LCP */
 func kasai(txt string, suffixArr []int) ([]int) {
+	// Suppose we have a string s = "banana$"
+	// suffixArray(s) = [6, 5, 3, 1, 0, 4, 2]
+	//
+	// LCP(s, suffixArray(s)) = [0, 0, 1, 3, 0, 0, 2]
+	// LCP iterates over the suffix array and looks at the current suffix,
+	// compared to the previous suffix.
+	// In the LCP array, the first value is 0 because there is no previous
+	// suffix. Then the next value is 0 because suffixes "$" and "a$" do not share
+	// a prefix. Then the value is 1 because "a$" and "ana$" share a 1-letter 
+	// prefix "a". The next value is 3 because "ana$" and "anana$" share a 3-letter
+	// prefix "ana". And so on.
+
 	var n int = len(suffixArr)
  
 	// To store LCP array
@@ -111,18 +135,18 @@ func kasai(txt string, suffixArr []int) ([]int) {
 	// Process all suffixes one by one starting from
 	// first suffix in txt[]
 	for i:=0; i<n; i++ {
-		/* If the current suffix is at n-1, then we don’t
-		   have next substring to consider. So lcp is not
-		   defined for this substring, we put zero. */
-		if invSuff[i] == n-1 {
+		// If the current suffix is at i=0, then we don’t
+		// have prev substring to consider. So lcp is not
+		// defined for this substring, we put zero.
+		if invSuff[i] == 0 {
 			k = 0
 			continue;
 		}
  
-		/* j contains index of the next substring to
-		   be considered  to compare with the present
-		   substring, i.e., next string in suffix array */
-		var j int = suffixArr[invSuff[i]+1];
+		// j contains index of the prev substring to
+		// be considered  to compare with the present
+		// substring, i.e., prev string in suffix array
+		var j int = suffixArr[invSuff[i]-1];
  
 		// Directly start matching from k'th index as
 		// at-least k-1 characters will match
@@ -143,83 +167,90 @@ func kasai(txt string, suffixArr []int) ([]int) {
 }
 
 
+func isSubsetOfAnyExisting(new string, existing []string) (bool) {
+	// This is made easier bc it's sorted by length
+	// so a subsequent element can never be a superset of an existing.
+	for _, strExisting := range existing {
+		if strings.Contains(strExisting, new) {
+			return true
+		}
+	}
+	return false
+}
+
+
 func findCommonSubstrings(text1 string, text2 string, minLen int) []string {
+	// Find all common non-overlapping substrings between two strings.
 	// minLen is the minimum acceptable length of resulting common substrings.
 	//
-	// findCommonSubstrings("banana", "anagram", 2)
-	//	-> ["ana", "na"]
+	// findCommonSubstrings("abcde", "bcbcd", 2)
+	//	-> ["bcd"]
+	//	Note: "bc" and "cd" are also common substrings, but they are substrings
+	//		of "bcd" and therefore do not count.
+	// 
+	// combined: "abcdebcbcd"
+	// suffix array: 	[0 5 7 1 6 8 2 9 3 4]
+	// suffixes:
+	// 	- abcdebcbcd
+	// 	- bcbcd
+	// 	- bcd
+	// 	- bcdebcbcd
+	// 	- cbcd
+	// 	- cd
+	// 	- cdebcbcd
+	// 	- d
+	// 	- debcbcd
+	// 	- ebcbcd
+	// LCP array: 		[0 0 2 3 0 1 2 0 1 0]
+	//
+	// Iterating through LCP we check to see if the LCP value is greater than
+	// minLen (meaning the overlap is long enough), and if the overlap occurs
+	// in both texts.
+	// We get some candidates:
+	// 	 - bc
+	// 	 - bcd
+	// 	 - cd
+	//
+	// We sort the candidates by length and remove those that are substrings of
+	// any previous candidate. Thus we are left with "bcd".
 	
 	// Get suffix array and Longest Common Prefix (LCP) array
 	// for combined text
-	var sa []int = getSuffixArray(text1 + text2)
-	var lcp []int = kasai(text1 + text2, sa)
+	var textCombined string = text1 + text2
+	var sa []int = getSuffixArray(textCombined)
+	var lcp []int = kasai(textCombined, sa)
 
-	// Collecting the substrings here
-	var crossDocSubstrs []Substr
+	// Collect candidates
+	var candidates []string
 
-	for i := 1; i < len(text); i++ {
-		if lcp[i] > minLen {
+	for i := 1; i < len(sa); i++ {
+		var isLongEnough bool = lcp[i] > minLen
+		if isLongEnough {
 			var j1 int = sa[i - 1]
 			var j2 int = sa[i]
 			var h int = lcp[i]
 			var jMin int = min(j1, j2)
 			var jMax int = max(j1, j2)
-			var isCrossDoc bool = jMin < lenA && jMax > lenA
-			if isCrossDoc {
-				var substring string = text[j1:j1 + h]
-				newSubstrs := Substr{
-					Text: substring,
-					Indexes: []int{jMin, jMax},
-				}
-				crossDocSubstrs = append(crossDocSubstrs, newSubstrs)
+			var isInBoth bool = jMin < len(text1) && jMax > len(text1)
+			if isInBoth {
+				var substring string = (textCombined)[j1:j1 + h]
+				candidates = append(candidates, substring)
 			}
 		}	
 	}
 
+	// Remove candidates that are a substring of other candidates.
 
-
-}
-func longestCommonSubstring(lenA int, text string, minLen int) ([]Substr) {
-	// Inputs
-	// 	- lenA: length of the first text
-	// 	- text: combined text (first and second concatenated)
-	// 	- minLen: minimum number of characters in substring
-	//
-	// Get the longest common substrings and their positions.
-	// >>> longest_common_substring('banana')
-	// {'ana': [1, 3]}
-	// >>> text = "not so Agamemnon, who spoke fiercely to "
-	// >>> sorted(longest_common_substring(text).items())
-	// [(' s', [3, 21]), ('no', [0, 13]), ('o ', [5, 20, 38])]
-	// This function can be easy modified for any criteria, e.g. for searching ten
-	// longest non overlapping repeated substrings.
-
-	// Get non overlapping
-	isSubsetOfAnyExisting := func(new Substr, existing []Substr) (bool) {
-		// This is made easier bc it's sorted by length
-		// so a subsequent element can never be a superset of an existing.
-		var n1_start int = new.Indexes[0]
-		var n1_end int = n1_start + len(new.Text)
-
-		for _, substrExisting := range existing {
-			var e1_start int = substrExisting.Indexes[0] // "e" for "existing"
-			var e1_end int = e1_start + len(substrExisting.Text)
-			// Look only at the zeroth occurrence of both strings
-			var newIsSubset bool = e1_start <= n1_start && n1_end <= e1_end
-			if newIsSubset {
-				return true
-			}
-		}
-		return false
-	}
-
-	// Sort by length, descending
-	sort.Slice(crossDocSubstrs, func(i, j int) bool {
-		return len(crossDocSubstrs[i].Text) > len(crossDocSubstrs[j].Text)
+	// Sort in place by length, descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return len(candidates[i]) > len(candidates[j])
 	})
-	var nonOverlapping []Substr
-	for _, new := range crossDocSubstrs {
-		if !(isSubsetOfAnyExisting(new, nonOverlapping)) {
+	// Go through and take out substrings
+	var nonOverlapping []string
+	for i := 0; i < len(candidates); i++ {
+		new := candidates[i]
+		existing := candidates[:i]
+		if !(isSubsetOfAnyExisting(new, existing)) {
 			nonOverlapping = append(nonOverlapping, new)
 		}
 	}
@@ -381,24 +412,23 @@ func compareFiles(pdf1 PdfData, pdf2 PdfData, minLen int) []PdfResult {
 
 	// Compare text
 	commonSubstrings := findCommonSubstrings(pdf1.FullText, pdf2.FullText, minLen)
-	var lcs []Substr = longestCommonSubstring(len(text1), combinedText, minLen)
 
-	for _, lcsResult := range lcs {
-		var strPreview string = getStringPreview(lcsResult.Text)
+	for _, s := range commonSubstrings {
+		var strPreview string = getStringPreview(s)
 		
 		resultPage1 := ResultPage{
 			Filename: pdf1.Filename,
-			Page: findPage(pdf1.PageTexts, lcsResult.Text),
+			Page: findPage(pdf1.PageTexts, s),
 		}
 		resultPage2 := ResultPage{
 			Filename: pdf2.Filename,
-			Page: findPage(pdf2.PageTexts, lcsResult.Text),
+			Page: findPage(pdf2.PageTexts, s),
 		}
 
 		var result PdfResult = PdfResult{
 			Kind: "Common text string",
 			StringPreview: strPreview,
-			NumCharacters: len(lcsResult.Text),
+			NumCharacters: len(s),
 			Pages: []ResultPage{resultPage1, resultPage2},
 		}
 
@@ -406,27 +436,25 @@ func compareFiles(pdf1 PdfData, pdf2 PdfData, minLen int) []PdfResult {
 	}
 
 	// Compare digits
-	var digits1 string = pdf1.FullDigits
-	var digits2 string = pdf2.FullDigits
-	var combineddigits string = digits1 + "||" + digits2
-	lcs = longestCommonSubstring(len(digits1), combineddigits, 15)
+	// minLen = 15
+	commonDigits := findCommonSubstrings(pdf1.FullDigits, pdf2.FullDigits, 15)
 
-	for _, lcsResult := range lcs {
-		var strPreview string = getStringPreview(lcsResult.Text)
+	for _, s := range commonDigits {
+		var strPreview string = getStringPreview(s)
 		
 		resultPage1 := ResultPage{
 			Filename: pdf1.Filename,
-			Page: findPage(pdf1.PageDigits, lcsResult.Text),
+			Page: findPage(pdf1.PageDigits, s),
 		}
 		resultPage2 := ResultPage{
 			Filename: pdf2.Filename,
-			Page: findPage(pdf2.PageDigits, lcsResult.Text),
+			Page: findPage(pdf2.PageDigits, s),
 		}
 
 		var result PdfResult = PdfResult{
 			Kind: "Common digit string",
 			StringPreview: strPreview,
-			NumCharacters: len(lcsResult.Text),
+			NumCharacters: len(s),
 			Pages: []ResultPage{resultPage1, resultPage2},
 		}
 
@@ -475,8 +503,5 @@ func main() {
 
 	resultsJson, _ := json.Marshal(results)
 	fmt.Println(string(resultsJson))
-
-	lcsTest := longestCommonSubstring(6, "banana banana", 0)
-	fmt.Println(lcsTest)
 	return
 }
