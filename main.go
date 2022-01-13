@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
+	"log"
 	"index/suffixarray"
 	"reflect"
 	"regexp"
@@ -17,6 +19,7 @@ import (
 	// "bytes"
 	// "github.com/ledongthuc/pdf"
 	"github.com/gen2brain/go-fitz"
+	"runtime/pprof"
 )
 
 // UTILS - pure utility functions
@@ -453,11 +456,20 @@ func compareFiles(pdf1 PdfData, pdf2 PdfData, minLen int) []PdfResult {
 //------------------------------------------------------------------------------
 func main() {
 	// Command line flags
-	filenamePtr := flag.String("f", "default", "Filenames to look at")
-	wordPtr := flag.Int("minlen", 280, "Minimum length of text match")
+	filenamePtr := 	flag.String("f", "default", "Filenames to look at")
+	wordPtr := 		flag.Int("minlen", 280, "Minimum length of text match")
+	cpuprofile := 	flag.String("cpuprofile", "", "write cpu profile to file")
 	flag.Parse()
 	var minLen int = *wordPtr
 	var filenames []string = parseFilenameString(*filenamePtr)
+    if *cpuprofile != "" {
+        f, err := os.Create(*cpuprofile)
+        if err != nil {
+            log.Fatal(err)
+        }
+        pprof.StartCPUProfile(f)
+        defer pprof.StopCPUProfile()
+    }
 
 	// Make sure we have files to actually read
 	if len(filenames) < 2 {
