@@ -1,5 +1,15 @@
 # PDF comparison tool written in Go
 
+## Setup
+Go can be downloaded and installed from here: https://go.dev/doc/install
+
+This package requires several dependencies. To download all of them, simply run:
+```zsh
+go get
+```
+
+This automatically goes through the code and downloads all needed dependencies.
+
 ## Usage
 Note: filenames are separated by commas
 ```zsh
