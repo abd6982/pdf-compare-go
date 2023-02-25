@@ -13,7 +13,7 @@ This automatically goes through the code and downloads all needed dependencies.
 ## Usage
 Note: filenames are separated by commas
 ```zsh
-go run main.go -f data/test_pdfs/small_test/copied_data.pdf,data/test_pdfs/small_test/orig_data.pdf
+go run main.go -f sample_files/sample_file_1.pdf,sample_files/sample_file_2.pdf
 ```
 
 ## Current features
